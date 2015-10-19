@@ -9,52 +9,77 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.MalformedURLException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.stream.Stream;
 
-import javax.servlet.ServletContainerInitializer;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-
+import org.apache.maven.artifact.Artifact;
+import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.MavenProject;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import pt.ist.fenixframework.FenixFramework;
-import pt.ist.fenixframework.core.DmlFile;
-
-public class BennuLabelOverriderStartupServlet implements ServletContainerInitializer {
+@Mojo(name = "bennu-label-overrider-mojo", defaultPhase = LifecyclePhase.INITIALIZE, threadSafe = true,
+        requiresDependencyResolution = ResolutionScope.COMPILE)
+public class BennuLabelOverriderMojo extends AbstractMojo {
 
     private static final String PROPERTIES_EXTENSION = ".properties";
     private static final String SPRING_RESOURCES = "META-INF/resources/WEB-INF/resources/";
     private static final String RESOURCES = "resources";
+    Logger logger = LoggerFactory.getLogger(getClass());
+
+    @Parameter(property = "project")
+    protected MavenProject mavenProject;
 
     @Override
-    public void onStartup(Set<Class<?>> c, ServletContext ctx) throws ServletException {
+    public void execute() throws MojoExecutionException, MojoFailureException {
         String property = System.getProperty("skipLabelOverride");
-        if (property == null || property.equals("true")) {
-            LoggerFactory.getLogger(getClass()).info("Not overriding labels");
+        if (property != null && property.equals("true")) {
+            logger.info("Not overriding labels");
         }
-        String realPath = ctx.getRealPath("/");
-        //ensure "/" termination (varies by tomcat version)
-        String realPathWithRightTermination = realPath.endsWith("/") ? realPath : realPath + "/";
 
-        List<DmlFile> fullDmlSortedList = FenixFramework.getProject().getFullDmlSortedList();
-        Stream<URL> sortedJars = fullDmlSortedList.stream().map(dml -> calculateJarURL(dml.getUrl()));
-        sortedJars.forEach(x -> extractProperties(x, realPathWithRightTermination));
+        logger.info("Overriding Labels");
+
+        String realPath = mavenProject.getBasedir().toPath().toString() + "/src/main/webapp/";
+        Collection<Artifact> dependencies = (Collection<Artifact>) mavenProject.getArtifactMap().values();
+        dependencies.stream().sorted(comparator.reversed()).map(a -> a.getFile())
+                .forEach(file -> extractProperties(file, realPath));
 
     }
 
-    private void extractProperties(URL url, String realPath) {
-        try (JarFile jarFile = new JarFile(new File(url.toURI()))) {
+    Comparator<Artifact> comparator = (x, y) -> {
+        //The dependency trails returns the projects which depend on this one
+            String yNameStart = y.getGroupId() + ":" + y.getArtifactId();
+            boolean yDependsOnX = ((Collection<String>) x.getDependencyTrail()).stream().anyMatch(s -> s.startsWith(yNameStart));
+            if (yDependsOnX) {
+                logger.debug(y.getArtifactId() + " depends on " + x.getArtifactId());
+                return 1;
+            }
+            String xNameStart = x.getGroupId() + ":" + x.getArtifactId();
+            boolean xDependsOnY = ((Collection<String>) y.getDependencyTrail()).stream().anyMatch(s -> s.startsWith(xNameStart));
+            if (xDependsOnY) {
+                logger.debug(x.getArtifactId() + " depends on " + y.getArtifactId());
+                return -1;
+            }
+            return 0;
+        };
+
+    private void extractProperties(File file, String realPath) {
+        try (JarFile jarFile = new JarFile(file)) {
             Enumeration<JarEntry> entries = jarFile.entries();
             while (entries.hasMoreElements()) {
                 JarEntry nextElement = entries.nextElement();
@@ -64,9 +89,9 @@ public class BennuLabelOverriderStartupServlet implements ServletContainerInitia
                 }
             }
 
-        } catch (IOException | URISyntaxException e) {
+        } catch (IOException e) {
             // this should not happen
-            throw new RuntimeException("Unable to operate with jar " + url, e);
+            throw new RuntimeException("Unable to operate with jar " + file, e);
         }
     }
 
