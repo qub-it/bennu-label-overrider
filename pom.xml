@@ -1,10 +1,9 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.qubit.solution.fenixedu</groupId>
 	<artifactId>bennu-label-overrider</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.1-SNAPSHOT</version>
 	<packaging>maven-plugin</packaging>
 	<properties>
 		<aetherVersion>1.0.2.v20150114</aetherVersion>
@@ -81,7 +80,8 @@
 	    <connection>scm:git:git://github.com/qub-it/bennu-label-overrider.git</connection>
 	    <developerConnection>scm:git:git@github.com:qub-it/bennu-label-overrider.git</developerConnection>
 	    <url>http://github.com/qub-it/bennu-label-overrider</url>
-	</scm>
+	  <tag>HEAD</tag>
+  </scm>
 	
 	<repositories>
 		<repository>
