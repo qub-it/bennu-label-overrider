@@ -70,6 +70,12 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+
+        if (mavenProject.getPackaging().equals("pom")) {
+            getLog().info("Project is pom type. Skipping resources override.");
+            return;
+        }
+
         String artifactCoords = mavenProject.getGroupId() + ":" + mavenProject.getArtifactId() + ":" + mavenProject.getVersion();
 
         logger.info("Overriding Labels");
