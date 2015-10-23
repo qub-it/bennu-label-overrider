@@ -76,7 +76,13 @@
 			</plugin>
 		</plugins>
 	</build>
-
+	
+	<scm>
+	    <connection>scm:git:git://github.com/qub-it/bennu-label-overrider.git</connection>
+	    <developerConnection>scm:git:git@github.com:qub-it/bennu-label-overrider.git</developerConnection>
+	    <url>http://github.com/qub-it/bennu-label-overrider</url>
+	</scm>
+	
 	<repositories>
 		<repository>
 			<id>ulisboa-repo</id>
