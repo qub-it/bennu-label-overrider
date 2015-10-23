@@ -13,23 +13,37 @@ import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.collection.CollectRequest;
+import org.eclipse.aether.collection.CollectResult;
+import org.eclipse.aether.collection.DependencyCollectionException;
+import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.graph.DependencyNode;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.util.artifact.JavaScopes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,38 +59,50 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
     @Parameter(property = "project")
     protected MavenProject mavenProject;
 
+    @Component
+    private RepositorySystem repoSystem;
+
+    @Parameter(defaultValue = "${repositorySystemSession}")
+    private RepositorySystemSession repoSession;
+
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}")
+    private List<RemoteRepository> remoteRepos;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        String property = System.getProperty("skipLabelOverride");
-        if (property != null && property.equals("true")) {
-            logger.info("Not overriding labels");
-        }
+        String artifactCoords = mavenProject.getGroupId() + ":" + mavenProject.getArtifactId() + ":" + mavenProject.getVersion();
 
         logger.info("Overriding Labels");
 
         String realPath = mavenProject.getBasedir().toPath().toString() + "/src/main/webapp/";
-        Collection<Artifact> dependencies = (Collection<Artifact>) mavenProject.getArtifactMap().values();
-        dependencies.stream().sorted(comparator.reversed()).map(a -> a.getFile())
-                .forEach(file -> extractProperties(file, realPath));
+        List<Artifact> dependencies = new ArrayList<Artifact>();
+        try {
+
+            CollectResult collectDependencies =
+                    repoSystem.collectDependencies(repoSession, new CollectRequest(new Dependency(new DefaultArtifact(
+                            artifactCoords), JavaScopes.RUNTIME), remoteRepos));
+            visit(dependencies, collectDependencies.getRoot().getChildren());
+            Collections.reverse(dependencies);
+        } catch (DependencyCollectionException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Unable to extract labels");
+        }
+
+        Map artifactMap = mavenProject.getArtifactMap();
+        dependencies.stream()
+                .map(x -> (org.apache.maven.artifact.Artifact) artifactMap.get(x.getGroupId() + ":" + x.getArtifactId()))
+                .filter(x -> x != null).map(x -> x.getFile()).forEach(file -> extractProperties(file, realPath));
 
     }
 
-    Comparator<Artifact> comparator = (x, y) -> {
-        //The dependency trails returns the projects which depend on this one
-            String yNameStart = y.getGroupId() + ":" + y.getArtifactId();
-            boolean yDependsOnX = ((Collection<String>) x.getDependencyTrail()).stream().anyMatch(s -> s.startsWith(yNameStart));
-            if (yDependsOnX) {
-                logger.debug(y.getArtifactId() + " depends on " + x.getArtifactId());
-                return 1;
+    private void visit(Collection<Artifact> dependencies, Collection<DependencyNode> dependencyNodes) {
+        for (DependencyNode node : dependencyNodes) {
+            if (!dependencies.contains(node.getArtifact())) {
+                dependencies.add(node.getArtifact());
+                visit(dependencies, node.getChildren());
             }
-            String xNameStart = x.getGroupId() + ":" + x.getArtifactId();
-            boolean xDependsOnY = ((Collection<String>) y.getDependencyTrail()).stream().anyMatch(s -> s.startsWith(xNameStart));
-            if (xDependsOnY) {
-                logger.debug(x.getArtifactId() + " depends on " + y.getArtifactId());
-                return -1;
-            }
-            return 0;
-        };
+        }
+    }
 
     private void extractProperties(File file, String realPath) {
         try (JarFile jarFile = new JarFile(file)) {
@@ -96,6 +122,7 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
     }
 
     private void extractProperties(JarFile jarFile, JarEntry nextElement, String realPath) throws IOException {
+        logger.debug("extracting " + nextElement + " from " + jarFile.getName());
         String realName = nextElement.getName();
         String encoding = realName.startsWith("META-INF/resources") ? "UTF-8" : "ISO-8859-1";
         realName =
@@ -147,8 +174,6 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         //copy tmp file to final file and delete the tmp
         Files.copy(tmpFile.toPath(), finalFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
         Files.delete(tmpFile.toPath());
-        //Force cache clear just in case any other web-listener accessed an old label
-//        ResourceBundle.clearCache();
     }
 
     URL calculateJarURL(URL dmlUrl) {
