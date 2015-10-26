@@ -14,9 +14,9 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +68,9 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.remoteProjectRepositories}")
     private List<RemoteRepository> remoteRepos;
 
+    //Building dependency graph utils
+    Map<String, DependencyNodeBean> nodes = new HashMap<>();
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
 
@@ -81,33 +84,112 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         logger.info("Overriding Labels");
 
         String realPath = mavenProject.getBasedir().toPath().toString() + "/src/main/webapp/";
-        List<Artifact> dependencies = new ArrayList<Artifact>();
+        List<DependencyNodeBean> topologicalSort = null;
         try {
+            Dependency dependency = new Dependency(new DefaultArtifact(artifactCoords), JavaScopes.RUNTIME);
+            CollectResult collectDependencies = collectDependencies(dependency);
+            visit(collectDependencies.getRoot());
+            topologicalSort = topologicalSort();
 
-            CollectResult collectDependencies =
-                    repoSystem.collectDependencies(repoSession, new CollectRequest(new Dependency(new DefaultArtifact(
-                            artifactCoords), JavaScopes.RUNTIME), remoteRepos));
-            visit(dependencies, collectDependencies.getRoot().getChildren());
-            Collections.reverse(dependencies);
         } catch (DependencyCollectionException e) {
             e.printStackTrace();
             throw new RuntimeException("Unable to extract labels");
         }
 
-        Map artifactMap = mavenProject.getArtifactMap();
-        dependencies.stream()
-                .map(x -> (org.apache.maven.artifact.Artifact) artifactMap.get(x.getGroupId() + ":" + x.getArtifactId()))
-                .filter(x -> x != null).map(x -> x.getFile()).forEach(file -> extractProperties(file, realPath));
+        Map<String, org.apache.maven.artifact.Artifact> artifactMap = mavenProject.getArtifactMap();
+        //Was topological sorted, we need to process it in the reverse order
+        Collections.reverse(topologicalSort);
+        topologicalSort.stream().map(x -> artifactMap.get(x.getId())).filter(x -> x != null).map(x -> x.getFile())
+                .forEach(file -> extractProperties(file, realPath));
 
     }
 
-    private void visit(Collection<Artifact> dependencies, Collection<DependencyNode> dependencyNodes) {
-        for (DependencyNode node : dependencyNodes) {
-            if (!dependencies.contains(node.getArtifact())) {
-                dependencies.add(node.getArtifact());
-                visit(dependencies, node.getChildren());
+    private CollectResult collectDependencies(Dependency dependency) throws DependencyCollectionException {
+        return repoSystem.collectDependencies(repoSession, new CollectRequest(dependency, remoteRepos));
+    }
+
+    class DependencyNodeBean {
+        String id;
+        Map<String, DependencyNodeBean> dependencies;
+        Set<String> dependendBy = new HashSet<String>();
+
+        public DependencyNodeBean(String id) {
+            this.id = id;
+            dependencies = new HashMap<String, DependencyNodeBean>();
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public void setId(String id) {
+            this.id = id;
+        }
+
+        public Map<String, DependencyNodeBean> getDependencies() {
+            return dependencies;
+        }
+
+        public void setDependencies(Map<String, DependencyNodeBean> dependencies) {
+            this.dependencies = dependencies;
+        }
+
+        public Set<String> getDependendBy() {
+            return dependendBy;
+        }
+
+        public void setDependendBy(Set<String> dependendBy) {
+            this.dependendBy = dependendBy;
+        }
+    }
+
+    private List<DependencyNodeBean> topologicalSort() {
+        List<DependencyNodeBean> sortedNodes = new ArrayList<BennuLabelOverriderMojo.DependencyNodeBean>();
+        while (!nodes.isEmpty()) {
+            boolean hadChanges = false;
+            outer: for (DependencyNodeBean node : new HashSet<>(nodes.values())) {
+                for (String dependedBy : node.getDependendBy()) {
+                    if (nodes.containsKey(dependedBy)) {
+                        continue outer;
+                    }
+                }
+                sortedNodes.add(node);
+                nodes.remove(node.getId());
+                hadChanges = true;
+            }
+            if (hadChanges == false) {
+                //Full iteration without any changes : somehow we have a dependency cycle, let's finish here  
+                return sortedNodes;
             }
         }
+        return sortedNodes;
+    }
+
+    private DependencyNodeBean visit(DependencyNode dependency) throws DependencyCollectionException {
+        Artifact artifact = dependency.getArtifact();
+        String id = artifact.getGroupId() + ":" + artifact.getArtifactId();
+
+        DependencyNodeBean dependencyNodeBean = nodes.get(id);
+        //Add new dependency node to the collection if we haven't found it yet  
+        if (dependencyNodeBean == null) {
+            dependencyNodeBean = new DependencyNodeBean(id);
+            nodes.put(dependencyNodeBean.getId(), dependencyNodeBean);
+        }
+
+        for (DependencyNode node : dependency.getChildren()) {
+            //visit the child node
+            DependencyNodeBean visit = nodes.get(node.getArtifact().getGroupId() + ":" + node.getArtifact().getArtifactId());
+            if (visit == null) {
+                CollectResult collectDependencies = collectDependencies(node.getDependency());
+                visit = visit(collectDependencies.getRoot());
+            }
+            //Add the current node to the child "depended by list" and add the child node to this node dependencies
+            visit.getDependendBy().add(dependencyNodeBean.getId());
+            if (!dependencyNodeBean.getDependencies().containsKey(visit.getId())) {
+                dependencyNodeBean.getDependencies().put(visit.getId(), visit);
+            }
+        }
+        return dependencyNodeBean;
     }
 
     private void extractProperties(File file, String realPath) {
