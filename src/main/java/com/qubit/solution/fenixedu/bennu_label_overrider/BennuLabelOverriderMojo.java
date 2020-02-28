@@ -68,7 +68,7 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.remoteProjectRepositories}")
     private List<RemoteRepository> remoteRepos;
 
-    //Building dependency graph utils
+    // Building dependency graph utils
     Map<String, DependencyNodeBean> nodes = new HashMap<>();
 
     @Override
@@ -97,10 +97,10 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         }
 
         Map<String, org.apache.maven.artifact.Artifact> artifactMap = mavenProject.getArtifactMap();
-        //Was topological sorted, we need to process it in the reverse order
+        // Was topological sorted, we need to process it in the reverse order
         Collections.reverse(topologicalSort);
-        topologicalSort.stream().map(x -> artifactMap.get(x.getId())).filter(x -> x != null).map(x -> x.getFile())
-                .forEach(file -> extractProperties(file, realPath));
+        topologicalSort.stream().map(x -> artifactMap.get(x.getId())).filter(x -> x != null && x.getType().equals("jar"))
+                .map(x -> x.getFile()).forEach(file -> extractProperties(file, realPath));
 
     }
 
@@ -158,7 +158,8 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
                 hadChanges = true;
             }
             if (hadChanges == false) {
-                //Full iteration without any changes : somehow we have a dependency cycle, let's finish here  
+                // Full iteration without any changes : somehow we have a dependency cycle,
+                // let's finish here
                 return sortedNodes;
             }
         }
@@ -170,20 +171,21 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         String id = artifact.getGroupId() + ":" + artifact.getArtifactId();
 
         DependencyNodeBean dependencyNodeBean = nodes.get(id);
-        //Add new dependency node to the collection if we haven't found it yet  
+        // Add new dependency node to the collection if we haven't found it yet
         if (dependencyNodeBean == null) {
             dependencyNodeBean = new DependencyNodeBean(id);
             nodes.put(dependencyNodeBean.getId(), dependencyNodeBean);
         }
 
         for (DependencyNode node : dependency.getChildren()) {
-            //visit the child node
+            // visit the child node
             DependencyNodeBean visit = nodes.get(node.getArtifact().getGroupId() + ":" + node.getArtifact().getArtifactId());
             if (visit == null) {
                 CollectResult collectDependencies = collectDependencies(node.getDependency());
                 visit = visit(collectDependencies.getRoot());
             }
-            //Add the current node to the child "depended by list" and add the child node to this node dependencies
+            // Add the current node to the child "depended by list" and add the child node
+            // to this node dependencies
             visit.getDependendBy().add(dependencyNodeBean.getId());
             if (!dependencyNodeBean.getDependencies().containsKey(visit.getId())) {
                 dependencyNodeBean.getDependencies().put(visit.getId(), visit);
@@ -213,15 +215,15 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         logger.debug("extracting " + nextElement + " from " + jarFile.getName());
         String realName = nextElement.getName();
         String encoding = realName.startsWith("META-INF/resources") ? "UTF-8" : "ISO-8859-1";
-        realName =
-                realName.startsWith("META-INF/resources") ? realName.replace("META-INF/resources", "") : "WEB-INF/classes/"
-                        + realName;
+        realName = realName.startsWith("META-INF/resources") ? realName.replace("META-INF/resources", "") : "WEB-INF/classes/"
+                + realName;
         File tmpFile = new File(realPath + realName + ".tmp");
         tmpFile.getParentFile().mkdirs();
         File finalFile = new File(realPath + realName);
         Set<String> foundKeys = new HashSet<>();
 
-        //save all the lines from the properties file to a temp file, save which keys were found
+        // save all the lines from the properties file to a temp file, save which keys
+        // were found
         BufferedWriter bufferedWriter =
                 new BufferedWriter(new OutputStreamWriter(new FileOutputStream(tmpFile), Charset.forName(encoding)));
         BufferedReader jarPropertiesReader =
@@ -230,7 +232,7 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         while ((readLine = jarPropertiesReader.readLine()) != null) {
             int indexOf = readLine.indexOf("=");
             if (indexOf > -1) {
-                //blank line or comment, or just invalid
+                // blank line or comment, or just invalid
                 String trimmedKey = readLine.substring(0, indexOf).trim();
                 foundKeys.add(trimmedKey);
             }
@@ -239,7 +241,7 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         }
 
         if (finalFile.exists()) {
-            //save from the real file to the temp file, skip the already existing keys
+            // save from the real file to the temp file, skip the already existing keys
             BufferedReader finalFileReader =
                     new BufferedReader(new InputStreamReader(new FileInputStream(finalFile), Charset.forName(encoding)));
             while ((readLine = finalFileReader.readLine()) != null) {
@@ -250,7 +252,9 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
                         continue;
                     }
                 }
-                //An existing (minor) bug is that, since we are not checking for comments and blank lines duplication, these can be duplicated in the final file at its end (giving an awkward result)
+                // An existing (minor) bug is that, since we are not checking for comments and
+                // blank lines duplication, these can be duplicated in the final file at its end
+                // (giving an awkward result)
                 bufferedWriter.write(readLine);
                 bufferedWriter.newLine();
             }
@@ -259,7 +263,7 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
         bufferedWriter.close();
         jarPropertiesReader.close();
 
-        //copy tmp file to final file and delete the tmp
+        // copy tmp file to final file and delete the tmp
         Files.copy(tmpFile.toPath(), finalFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
         Files.delete(tmpFile.toPath());
     }
@@ -267,7 +271,7 @@ public class BennuLabelOverriderMojo extends AbstractMojo {
     URL calculateJarURL(URL dmlUrl) {
         int lastIndexOf = dmlUrl.toString().lastIndexOf("!");
         try {
-            //remove the "jar:"
+            // remove the "jar:"
             String substring = dmlUrl.toString().substring(4, lastIndexOf);
             return new URL(substring);
         } catch (MalformedURLException e) {
