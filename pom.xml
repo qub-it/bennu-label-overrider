@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.qubit.solution.fenixedu</groupId>
 	<artifactId>bennu-label-overrider</artifactId>
-	<version>1.0.2-SNAPSHOT</version>
+	<version>1.0.0-rc-jdk11</version>
 	<packaging>maven-plugin</packaging>
 	<properties>
 		<aetherVersion>1.0.2.v20150114</aetherVersion>
