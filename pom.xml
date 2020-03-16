@@ -1,4 +1,6 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.qubit.solution.fenixedu</groupId>
@@ -8,7 +10,7 @@
 	<properties>
 		<aetherVersion>1.0.2.v20150114</aetherVersion>
 	</properties>
-	
+
 	<dependencies>
 		<dependency>
 			<groupId>org.apache.maven</groupId>
@@ -75,14 +77,14 @@
 			</plugin>
 		</plugins>
 	</build>
-	
+
 	<scm>
-	    <connection>scm:git:git://github.com/qub-it/bennu-label-overrider.git</connection>
-	    <developerConnection>scm:git:git@github.com:qub-it/bennu-label-overrider.git</developerConnection>
-	    <url>http://github.com/qub-it/bennu-label-overrider</url>
-	  <tag>HEAD</tag>
-  </scm>
-	
+		<connection>scm:git:git://github.com/qub-it/bennu-label-overrider.git</connection>
+		<developerConnection>scm:git:git@github.com:qub-it/bennu-label-overrider.git</developerConnection>
+		<url>http://github.com/qub-it/bennu-label-overrider</url>
+		<tag>HEAD</tag>
+	</scm>
+
 	<repositories>
 		<repository>
 			<id>ulisboa-repo</id>
