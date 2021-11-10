@@ -88,18 +88,18 @@
 	<repositories>
 		<repository>
 			<id>ulisboa-repo</id>
-			<url>http://nexus.ulisboa.pt:8081/nexus/content/groups/public/</url>
+			<url>https://nexjen.ulisboa.pt/nexus/content/groups/public/</url>
 		</repository>
 	</repositories>
 
 	<distributionManagement>
 		<repository>
 			<id>ulisboa-repo</id>
-			<url>http://nexus.ulisboa.pt:8081/nexus/content/repositories/releases/</url>
+			<url>https://nexjen.ulisboa.pt/nexus/content/repositories/releases/</url>
 		</repository>
 		<snapshotRepository>
 			<id>ulisboa-repo</id>
-			<url>http://nexus.ulisboa.pt:8081/nexus/content/repositories/snapshots/</url>
+			<url>https://nexjen.ulisboa.pt/nexus/content/repositories/snapshots/</url>
 		</snapshotRepository>
 	</distributionManagement>
 </project>
